@@ -1,0 +1,22 @@
+node_modules/
+dist/
+coverage/
+
+# Logs and test/build caches
+*.log
+.cache/
+.npm/
+.nyc_output/
+.vitest/
+
+# Local agent/runtime state
+.atl/
+.codex/
+.condex/
+.claude/
+.opencode/
+.openspec/
+
+# Environment and secrets
+.env
+.env.*
