@@ -1,4 +1,4 @@
-import type { InventoryReport } from "../domain/inventory";
+import type { InventoryReport } from "../domain/inventory.js";
 
 export interface PresenterOutput {
   write(chunk: string): void;

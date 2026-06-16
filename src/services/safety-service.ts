@@ -1,4 +1,4 @@
-import { APPROVAL_DECISION, type ApprovalDecision, type ApprovalGate, type ApprovalRequest } from "../domain/approval";
+import { APPROVAL_DECISION, type ApprovalDecision, type ApprovalGate, type ApprovalRequest } from "../domain/approval.js";
 
 export interface SafetyExecutionResult<T> {
   decision: ApprovalDecision;

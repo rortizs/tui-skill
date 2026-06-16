@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { discoverOpenCodeConfig } from "../adapters/opencode/config";
-import { inventoryOpenCodeSurfaces } from "../adapters/opencode/surfaces";
-import { APPROVAL_DECISION, SIDE_EFFECT } from "../domain/approval";
-import { CLIENT_ID, SOURCE_KIND, type ClientId, type InventoryReport, type SkillIdentity } from "../domain/inventory";
-import { PROFILE_SKILL_STATE, type ActivationProfile } from "../domain/profiles";
-import { buildActivationProfileGuidance } from "../services/activation-profile-service";
+import { discoverOpenCodeConfig } from "../adapters/opencode/config.js";
+import { inventoryOpenCodeSurfaces } from "../adapters/opencode/surfaces.js";
+import { APPROVAL_DECISION, SIDE_EFFECT } from "../domain/approval.js";
+import { CLIENT_ID, SOURCE_KIND, type ClientId, type InventoryReport, type SkillIdentity } from "../domain/inventory.js";
+import { PROFILE_SKILL_STATE, type ActivationProfile } from "../domain/profiles.js";
+import { buildActivationProfileGuidance } from "../services/activation-profile-service.js";
 import {
   COMMAND_SOURCE_KIND,
   OPENCODE_BUILTIN_COMMAND_NAMES,
@@ -16,12 +17,12 @@ import {
   builtinCommandProjections,
   type CommandProjection,
   type CommandSourceKind,
-} from "../services/collision-analyzer";
-import { inventorySkills, type SkillInventoryRoot } from "../services/inventory-service";
-import { planSkillRepair } from "../services/repair-planner";
-import { requireApprovedSideEffect } from "../services/safety-service";
-import { validateSkillFile } from "../services/validation-service";
-import { presentJsonReport } from "../tui/boundary";
+} from "../services/collision-analyzer.js";
+import { inventorySkills, type SkillInventoryRoot } from "../services/inventory-service.js";
+import { planSkillRepair } from "../services/repair-planner.js";
+import { requireApprovedSideEffect } from "../services/safety-service.js";
+import { validateSkillFile } from "../services/validation-service.js";
+import { presentJsonReport } from "../tui/boundary.js";
 
 export interface CliRunInput {
   argv?: string[];
@@ -289,8 +290,14 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "unknown error";
 }
 
-function isDirectInvocation(): boolean {
-  return Boolean(process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]);
+export function isDirectInvocation(moduleUrl: string = import.meta.url, argvEntry: string | undefined = process.argv[1]): boolean {
+  if (!argvEntry) return false;
+
+  try {
+    return realpathSync(fileURLToPath(moduleUrl)) === realpathSync(argvEntry);
+  } catch {
+    return false;
+  }
 }
 
 if (isDirectInvocation()) {

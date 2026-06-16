@@ -1,4 +1,4 @@
-import type { CompatibilityLevel } from "./compatibility";
+import type { CompatibilityLevel } from "./compatibility.js";
 
 export const CLIENT_ID = {
   OPENCODE: "opencode",

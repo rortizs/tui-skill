@@ -1,4 +1,4 @@
-import { CLIENT_ID, SOURCE_KIND, type SourceKind, type SourceProvenance } from "../domain/inventory";
+import { CLIENT_ID, SOURCE_KIND, type SourceKind, type SourceProvenance } from "../domain/inventory.js";
 
 export const COMMAND_SOURCE_KIND = {
   BUILTIN: "builtin",

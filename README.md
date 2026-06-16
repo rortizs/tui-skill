@@ -11,6 +11,26 @@ npm run typecheck
 npm run build
 ```
 
+## Local install and packaging
+
+Build the CLI before running it directly from the repository:
+
+```bash
+npm run build
+node ./dist/cli/index.js inventory --client opencode --project-dir . --home-dir "$HOME" --skill-root ~/.config/opencode/skill
+```
+
+For a local package smoke test, create a tarball and install it into a temporary project:
+
+```bash
+npm pack
+mkdir -p /tmp/tui-skills-smoke
+npm install --prefix /tmp/tui-skills-smoke ./tui-skills-0.1.0.tgz
+/tmp/tui-skills-smoke/node_modules/.bin/tui-skills profile-report --client opencode --skill-root ~/.config/opencode/skill
+```
+
+`npm pack` runs `npm run build` through the package `prepack` lifecycle. The published tarball is constrained to the built `dist/` output, `docs/`, and this README.
+
 Run CLI reports from the built package or import `runCli()` in tests:
 
 ```bash

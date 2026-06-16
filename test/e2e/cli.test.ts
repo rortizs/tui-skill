@@ -1,9 +1,10 @@
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { runCli, type CliRunInput } from "../../src/cli/index";
+import { isDirectInvocation, runCli, type CliRunInput } from "../../src/cli/index";
 
 interface CliResult {
   exitCode: number;
@@ -365,6 +366,16 @@ describe("CLI JSON reports", () => {
         },
       }
     `);
+  });
+
+  it("detects direct execution through an npm bin symlink", async () => {
+    const root = await mkdtemp(join(tmpdir(), "tui-skills-bin-"));
+    const cliSourcePath = fileURLToPath(new URL("../../src/cli/index.ts", import.meta.url));
+    const binPath = join(root, "tui-skills");
+
+    await symlink(cliSourcePath, binPath);
+
+    expect(isDirectInvocation(pathToFileURL(cliSourcePath).href, binPath)).toBe(true);
   });
 });
 

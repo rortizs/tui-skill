@@ -1,4 +1,4 @@
-import type { ClientId, SkillIdentity } from "./inventory";
+import type { ClientId, SkillIdentity } from "./inventory.js";
 
 export const PROFILE_SKILL_STATE = {
   SELECTED: "selected",

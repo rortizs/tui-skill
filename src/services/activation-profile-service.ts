@@ -1,18 +1,18 @@
-import { COMPATIBILITY_LEVEL } from "../domain/compatibility";
+import { COMPATIBILITY_LEVEL } from "../domain/compatibility.js";
 import {
   LOAD_STATUS,
   type InventoryReport,
   type SkillIdentity,
   type SkillRecord,
   skillIdentityKey,
-} from "../domain/inventory";
+} from "../domain/inventory.js";
 import {
   PROFILE_SKILL_STATE,
   SATURATION_RISK,
   type ActivationProfile,
   type ProfileGuidance,
   type SaturationRisk,
-} from "../domain/profiles";
+} from "../domain/profiles.js";
 
 export interface ActivationProfileGuidanceInput {
   profile: ActivationProfile;

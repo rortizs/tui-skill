@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { CLIENT_ID, CONFIG_LAYER, SOURCE_KIND, type ConfigLayer, type SourceProvenance } from "../../domain/inventory";
+import { CLIENT_ID, CONFIG_LAYER, SOURCE_KIND, type ConfigLayer, type SourceProvenance } from "../../domain/inventory.js";
 
 export const OPENCODE_CONFIG_FILE_NAME = {
   LEGACY: "config.json",

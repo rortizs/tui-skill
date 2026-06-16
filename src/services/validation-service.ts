@@ -3,8 +3,8 @@ import {
   VALIDATION_SEVERITY,
   type CompatibilityLevel,
   type ValidationFinding,
-} from "../domain/compatibility";
-import { CLIENT_ID, type ClientId } from "../domain/inventory";
+} from "../domain/compatibility.js";
+import { CLIENT_ID, type ClientId } from "../domain/inventory.js";
 
 export const SKILL_VALIDATION_CODE = {
   MISSING_OPENING_BOUNDARY: "skill.frontmatter.missing-opening-boundary",

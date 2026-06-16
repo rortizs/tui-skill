@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
-import { COMPATIBILITY_LEVEL } from "../domain/compatibility";
+import { COMPATIBILITY_LEVEL } from "../domain/compatibility.js";
 import {
   LOAD_STATUS,
   SOURCE_KIND,
@@ -11,8 +11,8 @@ import {
   type SourceProvenance,
   type UnavailableSource,
   skillIdentityKey,
-} from "../domain/inventory";
-import { validateSkillFile } from "./validation-service";
+} from "../domain/inventory.js";
+import { validateSkillFile } from "./validation-service.js";
 
 export interface SkillInventoryRoot {
   client: ClientId;

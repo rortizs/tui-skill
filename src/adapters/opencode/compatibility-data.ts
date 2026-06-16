@@ -1,4 +1,4 @@
-import { COMPATIBILITY_LEVEL, type CompatibilityLevel } from "../../domain/compatibility";
+import { COMPATIBILITY_LEVEL, type CompatibilityLevel } from "../../domain/compatibility.js";
 
 export const OPENCODE_COMPATIBILITY_CONFIDENCE = {
   OBSERVED_SOURCE: "observed-source",

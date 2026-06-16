@@ -1,4 +1,4 @@
-import type { ClientId } from "../domain/inventory";
+import type { ClientId } from "../domain/inventory.js";
 
 export const REPAIR_PLAN_STATUS = {
   SAFE: "safe",

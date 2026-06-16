@@ -9,8 +9,8 @@ import {
   type SourceKind,
   type SourceProvenance,
   type UnavailableSource,
-} from "../../domain/inventory";
-import type { OpenCodeConfigDiscovery, OpenCodeConfigDirectory, OpenCodeConfigDocument } from "./config";
+} from "../../domain/inventory.js";
+import type { OpenCodeConfigDiscovery, OpenCodeConfigDirectory, OpenCodeConfigDocument } from "./config.js";
 
 export const OPENCODE_SKILL_SOURCE_TYPE = {
   DIRECTORY: "directory",

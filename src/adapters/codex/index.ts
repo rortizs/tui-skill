@@ -1,5 +1,5 @@
-import { CLIENT_ID, type InventoryReport } from "../../domain/inventory";
-import { inventorySkills, type SkillInventoryRoot } from "../../services/inventory-service";
+import { CLIENT_ID, type InventoryReport } from "../../domain/inventory.js";
+import { inventorySkills, type SkillInventoryRoot } from "../../services/inventory-service.js";
 
 export interface CodexInventoryInput {
   roots: string[];
