@@ -2,7 +2,7 @@
   "name": "tui-skills",
   "version": "0.1.0",
   "description": "External skill management layer for AI coding clients.",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rortizs/tui-skill.git"

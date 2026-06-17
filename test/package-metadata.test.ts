@@ -55,7 +55,7 @@ describe("npm package metadata", () => {
     expect(manifest.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(manifest.description).toBeTruthy();
     expect(manifest.type).toBe("module");
-    expect(manifest.license).toBe("UNLICENSED");
+    expect(manifest.license).toBe("MIT");
     expect(manifest.repository).toEqual({ type: "git", url: "git+https://github.com/rortizs/tui-skill.git" });
     expect(manifest.engines?.node).toBe(">=20");
   });
