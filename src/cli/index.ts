@@ -7,7 +7,16 @@ import { fileURLToPath } from "node:url";
 import { discoverOpenCodeConfig } from "../adapters/opencode/config.js";
 import { inventoryOpenCodeSurfaces } from "../adapters/opencode/surfaces.js";
 import { APPROVAL_DECISION, SIDE_EFFECT } from "../domain/approval.js";
-import { CLIENT_ID, SOURCE_KIND, type ClientId, type InventoryReport, type SkillIdentity } from "../domain/inventory.js";
+import { COMPATIBILITY_LEVEL, VALIDATION_SEVERITY } from "../domain/compatibility.js";
+import {
+  CLIENT_ID,
+  LOAD_STATUS,
+  SOURCE_KIND,
+  type ClientId,
+  type InventoryReport,
+  type SkillIdentity,
+  type SkillRecord,
+} from "../domain/inventory.js";
 import { PROFILE_SKILL_STATE, type ActivationProfile } from "../domain/profiles.js";
 import { buildActivationProfileGuidance } from "../services/activation-profile-service.js";
 import {
@@ -19,7 +28,7 @@ import {
   type CommandSourceKind,
 } from "../services/collision-analyzer.js";
 import { inventorySkills, type SkillInventoryRoot } from "../services/inventory-service.js";
-import { planSkillRepair } from "../services/repair-planner.js";
+import { REPAIR_PLAN_STATUS, planSkillRepair } from "../services/repair-planner.js";
 import { requireApprovedSideEffect } from "../services/safety-service.js";
 import { validateSkillFile } from "../services/validation-service.js";
 import { presentJsonReport } from "../tui/boundary.js";
@@ -53,9 +62,76 @@ const CLI_COMMAND = {
   VALIDATE: "validate",
   PLAN_REPAIR: "plan-repair",
   PROFILE_REPORT: "profile-report",
+  DOCTOR: "doctor",
 } as const;
 
 type CliCommand = (typeof CLI_COMMAND)[keyof typeof CLI_COMMAND];
+
+interface DoctorReport {
+  kind: "doctor-report";
+  command: typeof CLI_COMMAND.DOCTOR;
+  client: ClientId;
+  inventory: DoctorInventorySummary;
+  validation: DoctorValidationSummary;
+  collisions?: DoctorCollisionSummary;
+  profile: ReturnType<typeof buildActivationProfileGuidance>;
+  repair: DoctorRepairSummary;
+  safety: SafetySummary;
+}
+
+interface DoctorInventorySummary {
+  skills: DoctorSkillInventorySummary;
+  surfaces: DoctorSurfaceInventorySummary;
+}
+
+interface DoctorSkillInventorySummary {
+  total: number;
+  available: number;
+  duplicate: number;
+  invalid: number;
+  unavailableSources: number;
+}
+
+interface DoctorSurfaceInventorySummary {
+  agents: number;
+  modes: number;
+  commands: number;
+  plugins: number;
+  mcpEntries: number;
+}
+
+interface DoctorValidationSummary {
+  summary: {
+    invalid: number;
+    warnings: number;
+    errors: number;
+  };
+  diagnostics: DoctorSkillValidationDiagnostic[];
+  invalidSkills: DoctorSkillValidationDiagnostic[];
+}
+
+interface DoctorSkillValidationDiagnostic {
+  name: string;
+  sourcePath?: string;
+  findings: ReturnType<typeof validateSkillFile>["findings"];
+}
+
+interface DoctorCollisionSummary {
+  total: number;
+  names: string[];
+}
+
+interface DoctorRepairSummary {
+  mutatesFiles: false;
+  safePlans: DoctorRepairPlanSummary[];
+  manualReviewRequired: DoctorRepairPlanSummary[];
+}
+
+interface DoctorRepairPlanSummary {
+  sourcePath: string;
+  status: ReturnType<typeof planSkillRepair>["status"];
+  summary: string;
+}
 
 const SAFETY_NOTE = "No files are mutated, plugins executed, MCP services connected, or config written without explicit approval.";
 
@@ -108,6 +184,10 @@ async function buildCommandReport(command: CliCommand, parsed: ParsedArguments, 
     };
   }
 
+  if (command === CLI_COMMAND.DOCTOR) {
+    return buildDoctorReport(parsed, input);
+  }
+
   const client = requiredClient(parsed);
   const inventory = await buildSkillInventory(client, skillRoots(parsed));
   const profile = activationProfileFromArguments(parsed, client);
@@ -143,6 +223,128 @@ async function buildOpenCodeInventory(parsed: ParsedArguments, input: CliRunInpu
   await proveDeniedSafetyActions();
 
   return { inventory, collisions: analyzeCommandCollisions({ projections: commandProjectionsFor(inventory) }) };
+}
+
+async function buildDoctorReport(parsed: ParsedArguments, input: CliRunInput): Promise<DoctorReport> {
+  const client = requiredClient(parsed);
+  const inventoryResult = client === CLIENT_ID.OPENCODE ? await buildOpenCodeInventory(parsed, input) : undefined;
+  const inventory = inventoryResult?.inventory ?? (await buildSkillInventory(client, skillRoots(parsed)));
+  const profile = activationProfileFromArguments(parsed, client);
+  const saturationLimit = optionalNumber(parsed, "saturation-limit");
+  const guidance = buildActivationProfileGuidance({
+    profile,
+    inventory,
+    matchingContextSkills: profile.selections.map((selection) => selection.identity),
+    ...(saturationLimit === undefined ? {} : { saturationLimit }),
+  });
+  const validation = await buildDoctorValidationSummary(client, inventory);
+  const repair = await buildDoctorRepairSummary(client, validation.invalidSkills);
+
+  return {
+    kind: "doctor-report",
+    command: CLI_COMMAND.DOCTOR,
+    client,
+    inventory: summarizeDoctorInventory(inventory),
+    validation,
+    ...(inventoryResult ? { collisions: summarizeDoctorCollisions(inventoryResult.collisions) } : {}),
+    profile: guidance,
+    repair,
+    safety: safetySummary(),
+  };
+}
+
+function summarizeDoctorInventory(inventory: InventoryReport): DoctorInventorySummary {
+  return {
+    skills: {
+      total: inventory.skills.length,
+      available: inventory.skills.filter((skill) => skill.status === LOAD_STATUS.AVAILABLE).length,
+      duplicate: inventory.skills.filter((skill) => skill.status === LOAD_STATUS.DUPLICATE).length,
+      invalid: inventory.skills.filter(isInvalidSkill).length,
+      unavailableSources: inventory.unavailableSources.length,
+    },
+    surfaces: {
+      agents: inventory.agents.length,
+      modes: inventory.modes.length,
+      commands: inventory.commands.length,
+      plugins: inventory.plugins.length,
+      mcpEntries: inventory.mcpEntries.length,
+    },
+  };
+}
+
+function summarizeDoctorCollisions(collisions: OpenCodeInventoryResult["collisions"]): DoctorCollisionSummary {
+  return {
+    total: collisions.collisions.length,
+    names: collisions.collisions.map((collision) => collision.name),
+  };
+}
+
+async function buildDoctorValidationSummary(client: ClientId, inventory: InventoryReport): Promise<DoctorValidationSummary> {
+  const skillsWithDiagnostics = await Promise.all(
+    inventory.skills.map(async (skill) => ({ skill, diagnostic: await buildSkillValidationDiagnostic(client, skill) })),
+  );
+  const diagnostics = skillsWithDiagnostics.map(({ diagnostic }) => diagnostic).filter(hasValidationFindings);
+  const invalidSkills = skillsWithDiagnostics.filter(({ skill }) => isInvalidSkill(skill)).map(({ diagnostic }) => diagnostic);
+  const findings = diagnostics.flatMap((skill) => skill.findings);
+
+  return {
+    summary: {
+      invalid: invalidSkills.length,
+      warnings: findings.filter((finding) => finding.severity === VALIDATION_SEVERITY.WARNING).length,
+      errors: findings.filter((finding) => finding.severity === VALIDATION_SEVERITY.ERROR).length,
+    },
+    diagnostics,
+    invalidSkills,
+  };
+}
+
+async function buildSkillValidationDiagnostic(client: ClientId, skill: SkillRecord): Promise<DoctorSkillValidationDiagnostic> {
+  const sourcePath = firstSkillSourcePath(skill);
+  if (!sourcePath) return { name: skill.identity.name, findings: [] };
+
+  const content = await readFile(sourcePath, "utf8");
+  const validation = validateSkillFile({
+    client,
+    sourceId: `${client}:${sourcePath}`,
+    sourcePath,
+    content,
+  });
+
+  return { name: skill.identity.name, sourcePath, findings: validation.findings };
+}
+
+function hasValidationFindings(diagnostic: DoctorSkillValidationDiagnostic): boolean {
+  return diagnostic.findings.length > 0;
+}
+
+async function buildDoctorRepairSummary(client: ClientId, invalidSkills: DoctorSkillValidationDiagnostic[]): Promise<DoctorRepairSummary> {
+  const repairPlans = await Promise.all(
+    invalidSkills.flatMap((skill) => {
+      if (!skill.sourcePath) return [];
+      return [buildDoctorRepairPlan(client, skill.sourcePath)];
+    }),
+  );
+
+  return {
+    mutatesFiles: false,
+    safePlans: repairPlans.filter((plan) => plan.status === REPAIR_PLAN_STATUS.SAFE),
+    manualReviewRequired: repairPlans.filter((plan) => plan.status === REPAIR_PLAN_STATUS.MANUAL_REVIEW),
+  };
+}
+
+async function buildDoctorRepairPlan(client: ClientId, sourcePath: string): Promise<DoctorRepairPlanSummary> {
+  const content = await readFile(sourcePath, "utf8");
+  const plan = planSkillRepair({ client, sourceId: sourcePath, sourcePath, content });
+
+  return { sourcePath, status: plan.status, summary: plan.summary };
+}
+
+function isInvalidSkill(skill: SkillRecord): boolean {
+  return skill.status === LOAD_STATUS.INVALID || skill.compatibility.includes(COMPATIBILITY_LEVEL.INCOMPATIBLE);
+}
+
+function firstSkillSourcePath(skill: SkillRecord): string | undefined {
+  return skill.sources.find((source) => source.sourcePath)?.sourcePath;
 }
 
 async function buildSkillInventory(client: ClientId, roots: string[]): Promise<InventoryReport> {

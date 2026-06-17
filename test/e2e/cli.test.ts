@@ -368,6 +368,182 @@ describe("CLI JSON reports", () => {
     `);
   });
 
+  it("prints a doctor report that composes inventory validation collisions profile and repair guidance", async () => {
+    const fixture = await createCliFixture();
+    const brokenSkillDir = join(fixture.skillRoot, "broken");
+    const brokenSkillFile = join(brokenSkillDir, "SKILL.md");
+
+    await mkdir(brokenSkillDir, { recursive: true });
+    await writeFile(brokenSkillFile, "name: broken\ndescription: Needs delimiter repair.\n---\nBody.\n");
+
+    const result = await runCommand([
+      "doctor",
+      "--client",
+      "opencode",
+      "--project-dir",
+      fixture.projectDir,
+      "--home-dir",
+      fixture.homeDir,
+      "--skill-root",
+      fixture.skillRoot,
+      "--selected",
+      "review",
+      "--saturation-limit",
+      "1",
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(normalizeJson(result.stdout, fixture.root)).toMatchInlineSnapshot(`
+      {
+        "client": "opencode",
+        "collisions": {
+          "names": [
+            "review",
+          ],
+          "total": 1,
+        },
+        "command": "doctor",
+        "inventory": {
+          "skills": {
+            "available": 1,
+            "duplicate": 0,
+            "invalid": 1,
+            "total": 2,
+            "unavailableSources": 0,
+          },
+          "surfaces": {
+            "agents": 0,
+            "commands": 2,
+            "mcpEntries": 1,
+            "modes": 0,
+            "plugins": 1,
+          },
+        },
+        "kind": "doctor-report",
+        "profile": {
+          "duplicated": [],
+          "inactive": [],
+          "incompatible": [
+            {
+              "client": "opencode",
+              "name": "broken",
+            },
+          ],
+          "profileId": "default",
+          "recommendation": "Refine the profile to reduce medium saturation risk; no skills are disabled automatically.",
+          "risk": "medium",
+          "selected": [
+            {
+              "client": "opencode",
+              "name": "review",
+            },
+          ],
+        },
+        "repair": {
+          "manualReviewRequired": [],
+          "mutatesFiles": false,
+          "safePlans": [
+            {
+              "sourcePath": "<fixture>/skills/broken/SKILL.md",
+              "status": "safe",
+              "summary": "Add YAML frontmatter delimiters around existing author-provided fields.",
+            },
+          ],
+        },
+        "safety": {
+          "deniedActions": [
+            "file-write",
+            "config-write",
+            "plugin-execute",
+            "mcp-connect",
+            "mcp-auth",
+          ],
+          "mode": "read-only",
+          "note": "No files are mutated, plugins executed, MCP services connected, or config written without explicit approval.",
+        },
+        "validation": {
+          "diagnostics": [
+            {
+              "findings": [
+                {
+                  "code": "skill.frontmatter.missing-opening-boundary",
+                  "level": "incompatible",
+                  "message": "SKILL.md is missing opening frontmatter delimiter.",
+                  "severity": "error",
+                  "sourceId": "opencode:<fixture>/skills/broken/SKILL.md",
+                  "targetClient": "opencode",
+                },
+              ],
+              "name": "broken",
+              "sourcePath": "<fixture>/skills/broken/SKILL.md",
+            },
+          ],
+          "invalidSkills": [
+            {
+              "findings": [
+                {
+                  "code": "skill.frontmatter.missing-opening-boundary",
+                  "level": "incompatible",
+                  "message": "SKILL.md is missing opening frontmatter delimiter.",
+                  "severity": "error",
+                  "sourceId": "opencode:<fixture>/skills/broken/SKILL.md",
+                  "targetClient": "opencode",
+                },
+              ],
+              "name": "broken",
+              "sourcePath": "<fixture>/skills/broken/SKILL.md",
+            },
+          ],
+          "summary": {
+            "errors": 1,
+            "invalid": 1,
+            "warnings": 0,
+          },
+        },
+      }
+    `);
+    expect(await readFile(brokenSkillFile, "utf8")).toBe("name: broken\ndescription: Needs delimiter repair.\n---\nBody.\n");
+  });
+
+  it("includes warning-only validation findings for loadable skills in doctor reports", async () => {
+    const fixture = await createCliFixture();
+    const runtimeOnlySkillDir = join(fixture.skillRoot, "runtime-only");
+
+    await mkdir(runtimeOnlySkillDir, { recursive: true });
+    await writeFile(join(runtimeOnlySkillDir, "SKILL.md"), "---\nname: runtime-only\n---\nBody.\n");
+
+    const result = await runCommand([
+      "doctor",
+      "--client",
+      "opencode",
+      "--project-dir",
+      fixture.projectDir,
+      "--home-dir",
+      fixture.homeDir,
+      "--skill-root",
+      fixture.skillRoot,
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    const report = normalizeJson(result.stdout, fixture.root) as {
+      validation: {
+        summary: { errors: number; invalid: number; warnings: number };
+        diagnostics: Array<{ findings: Array<{ code: string; severity: string }>; name: string; sourcePath?: string }>;
+        invalidSkills: Array<{ findings: Array<{ code: string; severity: string }>; name: string; sourcePath?: string }>;
+      };
+    };
+
+    expect(report.validation.summary).toEqual({ errors: 0, invalid: 0, warnings: 1 });
+    expect(report.validation.invalidSkills).toEqual([]);
+    expect(report.validation.diagnostics).toEqual([
+      {
+        findings: [expect.objectContaining({ code: "skill.frontmatter.missing-docs-field", severity: "warning" })],
+        name: "runtime-only",
+        sourcePath: "<fixture>/skills/runtime-only/SKILL.md",
+      },
+    ]);
+  });
+
   it("detects direct execution through an npm bin symlink", async () => {
     const root = await mkdtemp(join(tmpdir(), "tui-skills-bin-"));
     const cliSourcePath = fileURLToPath(new URL("../../src/cli/index.ts", import.meta.url));

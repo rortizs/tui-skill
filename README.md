@@ -18,6 +18,7 @@ Build the CLI before running it directly from the repository:
 ```bash
 npm run build
 node ./dist/cli/index.js inventory --client opencode --project-dir . --home-dir "$HOME" --skill-root ~/.config/opencode/skill
+node ./dist/cli/index.js doctor --client opencode --project-dir . --home-dir "$HOME" --skill-root ~/.config/opencode/skill
 ```
 
 For a local package smoke test, create a tarball and install it into a temporary project:
@@ -35,6 +36,7 @@ Run CLI reports from the built package or import `runCli()` in tests:
 
 ```bash
 tui-skills inventory --client opencode --project-dir . --home-dir "$HOME" --skill-root ~/.config/opencode/skill
+tui-skills doctor --client opencode --project-dir . --home-dir "$HOME" --skill-root ~/.config/opencode/skill
 tui-skills validate --client codex --skill-file ./path/to/SKILL.md
 tui-skills plan-repair --client codex --skill-file ./path/to/SKILL.md
 tui-skills profile-report --client opencode --skill-root ~/.config/opencode/skill --selected typescript
@@ -63,6 +65,14 @@ tui-skills inventory --client opencode --project-dir . --home-dir "$HOME" --skil
 ```
 
 The command reports collision groups instead of renaming or suppressing sources. Precedence is marked as unknown unless adapter knowledge can prove it.
+
+### `doctor`
+
+Runs the default read-only diagnostic entry point for a client. The current JSON report composes existing inventory, validation, command-collision, activation-profile, repair-planning, and safety summaries without mutating skill files or client configuration.
+
+```bash
+tui-skills doctor --client opencode --project-dir . --home-dir "$HOME" --skill-root ./skills
+```
 
 ### `validate`
 
