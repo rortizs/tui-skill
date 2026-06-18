@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { realpathSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { constants, realpathSync } from "node:fs";
+import { access, readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { discoverOpenCodeConfig } from "../adapters/opencode/config.js";
@@ -85,11 +85,17 @@ interface DoctorInventorySummary {
 }
 
 interface DoctorSkillInventorySummary {
+  roots: DoctorRootScopeSummary;
   total: number;
   available: number;
   duplicate: number;
   invalid: number;
   unavailableSources: number;
+}
+
+interface DoctorRootScopeSummary {
+  count: number;
+  paths: string[];
 }
 
 interface DoctorSurfaceInventorySummary {
@@ -133,6 +139,27 @@ interface DoctorRepairPlanSummary {
   summary: string;
 }
 
+interface ErrorReport {
+  kind: "error-report";
+  command: CliCommand;
+  error: ErrorReportDetails;
+}
+
+interface ErrorReportDetails {
+  message: string;
+  option?: string;
+  path?: string;
+}
+
+class CliReportError extends Error {
+  readonly report: ErrorReport;
+
+  constructor(report: ErrorReport) {
+    super(report.error.message);
+    this.report = report;
+  }
+}
+
 const SAFETY_NOTE = "No files are mutated, plugins executed, MCP services connected, or config written without explicit approval.";
 
 export async function runCli(input: CliRunInput = {}): Promise<number> {
@@ -146,6 +173,11 @@ export async function runCli(input: CliRunInput = {}): Promise<number> {
     presentJsonReport(report, { write: output });
     return 0;
   } catch (error) {
+    if (error instanceof CliReportError) {
+      presentJsonReport(error.report, { write: errorOutput });
+      return 1;
+    }
+
     errorOutput(`${errorMessage(error)}\n`);
     return 1;
   }
@@ -202,7 +234,7 @@ async function buildCommandReport(command: CliCommand, parsed: ParsedArguments, 
   return { command, profile: guidance, safety: safetySummary() };
 }
 
-async function buildOpenCodeInventory(parsed: ParsedArguments, input: CliRunInput): Promise<OpenCodeInventoryResult> {
+async function buildOpenCodeInventory(parsed: ParsedArguments, input: CliRunInput, rootPaths = skillRoots(parsed)): Promise<OpenCodeInventoryResult> {
   const projectDir = optionalValue(parsed, "project-dir") ?? input.cwd ?? process.cwd();
   const homeDir = optionalValue(parsed, "home-dir") ?? input.env?.HOME ?? process.env.HOME ?? projectDir;
   const globalConfigDir = optionalValue(parsed, "global-config-dir");
@@ -213,7 +245,7 @@ async function buildOpenCodeInventory(parsed: ParsedArguments, input: CliRunInpu
     ...(envConfigDir ? { envConfigDir } : {}),
   });
   const surfaces = await inventoryOpenCodeSurfaces({ config, projectDir, homeDir });
-  const skills = await buildSkillInventory(CLIENT_ID.OPENCODE, skillRoots(parsed));
+  const skills = await buildSkillInventory(CLIENT_ID.OPENCODE, rootPaths);
   const inventory: InventoryReport = {
     ...surfaces.report,
     skills: skills.skills,
@@ -227,8 +259,9 @@ async function buildOpenCodeInventory(parsed: ParsedArguments, input: CliRunInpu
 
 async function buildDoctorReport(parsed: ParsedArguments, input: CliRunInput): Promise<DoctorReport> {
   const client = requiredClient(parsed);
-  const inventoryResult = client === CLIENT_ID.OPENCODE ? await buildOpenCodeInventory(parsed, input) : undefined;
-  const inventory = inventoryResult?.inventory ?? (await buildSkillInventory(client, skillRoots(parsed)));
+  const rootPaths = await doctorSkillRoots(parsed);
+  const inventoryResult = client === CLIENT_ID.OPENCODE ? await buildOpenCodeInventory(parsed, input, rootPaths) : undefined;
+  const inventory = inventoryResult?.inventory ?? (await buildSkillInventory(client, rootPaths));
   const profile = activationProfileFromArguments(parsed, client);
   const saturationLimit = optionalNumber(parsed, "saturation-limit");
   const guidance = buildActivationProfileGuidance({
@@ -244,7 +277,7 @@ async function buildDoctorReport(parsed: ParsedArguments, input: CliRunInput): P
     kind: "doctor-report",
     command: CLI_COMMAND.DOCTOR,
     client,
-    inventory: summarizeDoctorInventory(inventory),
+    inventory: summarizeDoctorInventory(inventory, rootPaths),
     validation,
     ...(inventoryResult ? { collisions: summarizeDoctorCollisions(inventoryResult.collisions) } : {}),
     profile: guidance,
@@ -253,9 +286,10 @@ async function buildDoctorReport(parsed: ParsedArguments, input: CliRunInput): P
   };
 }
 
-function summarizeDoctorInventory(inventory: InventoryReport): DoctorInventorySummary {
+function summarizeDoctorInventory(inventory: InventoryReport, rootPaths: string[]): DoctorInventorySummary {
   return {
     skills: {
+      roots: { count: rootPaths.length, paths: rootPaths },
       total: inventory.skills.length,
       available: inventory.skills.filter((skill) => skill.status === LOAD_STATUS.AVAILABLE).length,
       duplicate: inventory.skills.filter((skill) => skill.status === LOAD_STATUS.DUPLICATE).length,
@@ -452,6 +486,31 @@ function requiredClient(parsed: ParsedArguments): ClientId {
 
 function skillRoots(parsed: ParsedArguments): string[] {
   return values(parsed, "skill-root");
+}
+
+async function doctorSkillRoots(parsed: ParsedArguments): Promise<string[]> {
+  const rootPaths = values(parsed, "root");
+  if (rootPaths.length === 0) return skillRoots(parsed);
+
+  await assertReadableSkillRoots(rootPaths, CLI_COMMAND.DOCTOR, "--root");
+
+  return rootPaths;
+}
+
+async function assertReadableSkillRoots(rootPaths: string[], command: CliCommand, option: string): Promise<void> {
+  for (const rootPath of rootPaths) {
+    try {
+      const rootStat = await stat(rootPath);
+      if (!rootStat.isDirectory()) throw new Error("not a directory");
+      await access(rootPath, constants.R_OK);
+    } catch {
+      throw new CliReportError({
+        kind: "error-report",
+        command,
+        error: { message: "Skill root is not readable.", option, path: rootPath },
+      });
+    }
+  }
 }
 
 function values(parsed: ParsedArguments, key: string): string[] {

@@ -408,6 +408,12 @@ describe("CLI JSON reports", () => {
             "available": 1,
             "duplicate": 0,
             "invalid": 1,
+            "roots": {
+              "count": 1,
+              "paths": [
+                "<fixture>/skills",
+              ],
+            },
             "total": 2,
             "unavailableSources": 0,
           },
@@ -542,6 +548,57 @@ describe("CLI JSON reports", () => {
         sourcePath: "<fixture>/skills/runtime-only/SKILL.md",
       },
     ]);
+  });
+
+  it("diagnoses only the skill root selected with doctor --root", async () => {
+    const fixture = await createCliFixture();
+    const scopedRoot = join(fixture.root, "scoped-skills");
+
+    await mkdir(join(scopedRoot, "scoped"), { recursive: true });
+    await writeFile(join(scopedRoot, "scoped", "SKILL.md"), "---\nname: scoped\ndescription: Scoped diagnostic skill.\n---\nBody.\n");
+
+    const result = await runCommand([
+      "doctor",
+      "--client",
+      "opencode",
+      "--project-dir",
+      fixture.projectDir,
+      "--home-dir",
+      fixture.homeDir,
+      "--root",
+      scopedRoot,
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    const report = normalizeJson(result.stdout, fixture.root) as {
+      inventory: { skills: { roots: { count: number; paths: string[] }; total: number; available: number; invalid: number } };
+      validation: { summary: { errors: number; invalid: number; warnings: number } };
+    };
+
+    expect(report.inventory.skills.roots).toEqual({ count: 1, paths: ["<fixture>/scoped-skills"] });
+    expect(report.inventory.skills.total).toBe(1);
+    expect(report.inventory.skills.available).toBe(1);
+    expect(report.inventory.skills.invalid).toBe(0);
+    expect(report.validation.summary).toEqual({ errors: 0, invalid: 0, warnings: 0 });
+  });
+
+  it("returns a JSON error when doctor --root is not readable", async () => {
+    const fixture = await createCliFixture();
+    const missingRoot = join(fixture.root, "missing-skills");
+
+    const result = await runCommand(["doctor", "--client", "opencode", "--root", missingRoot]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(normalizeJson(result.stderr, fixture.root)).toEqual({
+      command: "doctor",
+      error: {
+        message: "Skill root is not readable.",
+        option: "--root",
+        path: "<fixture>/missing-skills",
+      },
+      kind: "error-report",
+    });
   });
 
   it("detects direct execution through an npm bin symlink", async () => {

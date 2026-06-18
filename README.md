@@ -19,6 +19,7 @@ Build the CLI before running it directly from the repository:
 npm run build
 node ./dist/cli/index.js inventory --client opencode --project-dir . --home-dir "$HOME" --skill-root ~/.config/opencode/skill
 node ./dist/cli/index.js doctor --client opencode --project-dir . --home-dir "$HOME" --skill-root ~/.config/opencode/skill
+node ./dist/cli/index.js doctor --client opencode --root ~/.config/opencode/skills
 ```
 
 For a local package smoke test, create a tarball and install it into a temporary project:
@@ -37,6 +38,7 @@ Run CLI reports from the built package or import `runCli()` in tests:
 ```bash
 tui-skills inventory --client opencode --project-dir . --home-dir "$HOME" --skill-root ~/.config/opencode/skill
 tui-skills doctor --client opencode --project-dir . --home-dir "$HOME" --skill-root ~/.config/opencode/skill
+tui-skills doctor --client opencode --root ~/.config/opencode/skills
 tui-skills validate --client codex --skill-file ./path/to/SKILL.md
 tui-skills plan-repair --client codex --skill-file ./path/to/SKILL.md
 tui-skills profile-report --client opencode --skill-root ~/.config/opencode/skill --selected typescript
@@ -72,7 +74,10 @@ Runs the default read-only diagnostic entry point for a client. The current JSON
 
 ```bash
 tui-skills doctor --client opencode --project-dir . --home-dir "$HOME" --skill-root ./skills
+tui-skills doctor --client opencode --root ~/.config/opencode/skills
 ```
+
+Use `--root <path>` when you want `doctor` to scope skill diagnostics to one specific skill root. The JSON report includes the selected root count and paths under `inventory.skills.roots`.
 
 ### `validate`
 
